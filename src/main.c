@@ -7,6 +7,9 @@
 #define WINDOW_HEIGHT 320
 #define PIXEL_SIZE 10
 
+#define AUDIO_FREQ 44100
+#define BEEP_HZ 440 // Tone pitch (A4 note)
+
 int main(int argc, char **argv) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         printf("SDL init failed: %s\n", SDL_GetError());
@@ -19,11 +22,34 @@ int main(int argc, char **argv) {
         SDL_Quit();
         return 1;
     }
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        SDL_Log("SDL Audio init failed: %s", SDL_GetError());
+    }
+
+    SDL_AudioSpec spec = {
+        .format = SDL_AUDIO_S16,
+        .channels = 1,
+        .freq = 44100
+    };
+
+    // Open audio device and create stream in one shot
+    SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+
+    if (!audio_stream) {
+        SDL_Log("Failed to create audio stream: %s", SDL_GetError());
+    }
+
+    // --- RE-ADDED BEEP BUFFER GENERATION ---
+    int16_t beep_buffer[AUDIO_FREQ];
+    for (int i = 0; i < AUDIO_FREQ; i++) {
+        // Generate a simple square wave alternating between high and low volume
+        beep_buffer[i] = ((i * BEEP_HZ / AUDIO_FREQ) % 2 == 0) ? 3000 : -3000;
+    }
 
     Chip8 cpu;
     chip8_init(&cpu);
 
-    if (!chip8_load_rom(&cpu, "../games/bowling.ch8")) {
+    if (!chip8_load_rom(&cpu, "../games/pong-1.ch8")) {
         return 1;
     }
 
@@ -86,6 +112,19 @@ int main(int argc, char **argv) {
 
         // Update CHIP-8 timers at 60Hz (once per SDL frame loop)
         chip8_update_timers(&cpu);
+        if (audio_stream) {
+            if (cpu.sound_timer > 0) {
+                // If the stream is running low on audio data, queue up more beep samples
+                if (SDL_GetAudioStreamQueued(audio_stream) < 2000) {
+                    SDL_PutAudioStreamData(audio_stream, beep_buffer, 735 * sizeof(int16_t));
+                }
+                SDL_ResumeAudioStreamDevice(audio_stream);
+            } else {
+                // Stop playing and clear out any leftover audio data instantly
+                SDL_PauseAudioStreamDevice(audio_stream);
+                SDL_ClearAudioStream(audio_stream);
+            }
+        }
 
         // Clear the screen
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -114,6 +153,9 @@ int main(int argc, char **argv) {
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    if (audio_stream) {
+        SDL_DestroyAudioStream(audio_stream);
+    }
     SDL_Quit();
     return 0;
 }
