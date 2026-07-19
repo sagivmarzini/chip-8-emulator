@@ -6,7 +6,7 @@
 #include <time.h>
 
 // Font set for rendering
-static const uint8_t FONTSET[NUM_FONT_DIGITS][DIGIT_FONT_SIZE] = {
+static const uint8_t FONTSET[NUM_FONT_DIGITS][DIGIT_SIZE] = {
     {0xF0, 0x90, 0x90, 0x90, 0xF0}, // 0
     {0x20, 0x60, 0x20, 0x20, 0x70}, // 1
     {0xF0, 0x10, 0xF0, 0x80, 0xF0}, // 2
@@ -30,7 +30,7 @@ void chip8_init(Chip8 *cpu) {
 
     cpu->pc = 0x200; // CHIP-8 programs start at memory address 0x200
 
-    memcpy(cpu->ram, FONTSET, sizeof(FONTSET));
+    memcpy(cpu->ram + FONT_STORE_OFFSET, FONTSET, sizeof(FONTSET));
 
     srand(time(NULL));
 }
@@ -143,7 +143,7 @@ void chip8_cycle(Chip8 *cpu) {
                     V[x] = V[y] - V[x];
                     break;
                 case 0xE:
-                    V[0xF] = V[x] & 0x80;
+                    V[0xF] = V[x] & 0b10000000;
                     V[x] <<= 1;
                     break;
             }
@@ -162,7 +162,73 @@ void chip8_cycle(Chip8 *cpu) {
             V[x] = rand() & nn;
             break;
         case 0xD000: // Display n-byte sprite starting at memory location I at (Vx, Vy)
-            
+            V[0xF] = 0;
+
+            // Loop through the bits of the sprite
+            for (uint8_t row = 0; row < n; row++) {
+                for (uint8_t col = 0; col < 8; col++) {
+                    uint8_t screen_x = (V[x] + col) % 64;
+                    uint8_t screen_y = (V[y] + row) % 32;
+
+                    uint8_t sprite_pixel = cpu->ram[cpu->I + row] & (0b10000000 >> col);
+                    uint8_t screen_pixel = cpu->display[screen_x][screen_y];
+                    V[0xF] |= sprite_pixel & screen_pixel; // Mark collision
+
+                    cpu->display[screen_x][screen_y] ^= sprite_pixel;
+                }
+            }
+
+            break;
+        case 0xE000: // Keypad input
+            switch (nn) {
+                case 0x9E: // Skip next instruction if key with the value of Vx is pressed.
+                    if (cpu->keypad[V[x]] == true)
+                        cpu->pc += 2;
+                    break;
+                case 0xA1: // Skip next instruction if key with the value of Vx is not pressed.
+                    if (cpu->keypad[V[x]] == false)
+                        cpu->pc += 2;
+                    break;
+            }
+            break;
+        case 0xF000:
+            switch (nn) {
+                case 0x07:
+                    V[x] = cpu->delay_timer;
+                    break;
+                case 0x0A: // Wait for a key press, store the value of the key in Vx
+                    cpu->waiting_for_key = true;
+                    cpu->waiting_register = x;
+                    break;
+                case 0x15:
+                    cpu->delay_timer = V[x];
+                    break;
+                case 0x18:
+                    cpu->sound_timer = V[x];
+                    break;
+                case 0x1E:
+                    cpu->I += V[x];
+                    break;
+                case 0x29:
+                    cpu->I = cpu->ram[FONT_STORE_OFFSET + V[x] * DIGIT_SIZE];
+                    break;
+                case 0x33: // Store BCD representation of Vx in memory locations I, I+1, and I+2
+                    const uint8_t num = V[x];
+                    cpu->ram[cpu->I] = (num / 100) % 10;
+                    cpu->ram[cpu->I + 1] = (num / 10) % 10;
+                    cpu->ram[cpu->I + 2] = (num) % 10;
+                    break;
+                case 0x55:
+                    for (int i = 0; i <= x; i++) {
+                        cpu->ram[cpu->I + i] = V[i];
+                    }
+                    break;
+                case 0x65:
+                    for (int i = 0; i <= x; i++) {
+                        V[i] = cpu->ram[cpu->I + i];
+                    }
+                    break;
+            }
             break;
     }
 }

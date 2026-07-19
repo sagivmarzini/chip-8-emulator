@@ -8,7 +8,12 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    // TODO: Read keyboard events
+    // TODO: Handle CPU waiting for key
+
     chip8_cycle(&cpu);
+
+    // TODO: Draw display to screen
 
     return 0;
 }

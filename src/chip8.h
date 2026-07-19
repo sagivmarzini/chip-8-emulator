@@ -12,8 +12,9 @@
 #define NUM_KEYS		16
 #define MAX_FILE_SIZE	0xE00
 #define SPRITE_WIDTH	8
+#define FONT_STORE_OFFSET 0
 #define NUM_FONT_DIGITS 16
-#define DIGIT_FONT_SIZE	5
+#define DIGIT_SIZE	5
 #define MAX_SPRITE_HEIGHT 15
 
 typedef struct {
@@ -29,6 +30,10 @@ typedef struct {
 
     uint8_t display[SCREEN_WIDTH][SCREEN_HEIGHT]; // Monochrome screen state (1 for on, 0 for off)
     bool keypad[NUM_KEYS]; // Key state (true = pressed)
+
+    // For when waiting for a key press
+    bool waiting_for_key;
+    uint8_t waiting_register;
 } Chip8;
 
 void chip8_init(Chip8 *cpu);
