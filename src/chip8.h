@@ -14,26 +14,27 @@
 #define SPRITE_WIDTH	8
 #define NUM_FONT_DIGITS 16
 #define DIGIT_FONT_SIZE	5
+#define MAX_SPRITE_HEIGHT 15
 
 typedef struct {
-	uint8_t ram[SYSTEM_MEMORY]; // 4KB of memory
-	uint8_t V[NUM_REGISTERS];   // General-purpose registers V0-VF
-	uint16_t I;                 // Index register
-	uint16_t pc;                // Program counter
-	uint16_t stack[STACK_SIZE]; // Call stack
-	uint8_t sp;                 // Stack pointer
+    uint8_t ram[SYSTEM_MEMORY]; // 4KB of memory
+    uint8_t V[NUM_REGISTERS]; // General-purpose registers V0-VF
+    uint16_t I; // Index register
+    uint16_t pc; // Program counter
+    uint16_t stack[STACK_SIZE]; // Call stack
+    uint8_t sp; // Stack pointer
 
-	uint8_t delay_timer;
-	uint8_t sound_timer;
+    uint8_t delay_timer;
+    uint8_t sound_timer;
 
-	uint8_t display[SCREEN_WIDTH][SCREEN_HEIGHT]; // Monochrome screen state (1 for on, 0 for off)
-	bool keypad[NUM_KEYS];                        // Key state (true = pressed)
+    uint8_t display[SCREEN_WIDTH][SCREEN_HEIGHT]; // Monochrome screen state (1 for on, 0 for off)
+    bool keypad[NUM_KEYS]; // Key state (true = pressed)
 } Chip8;
 
-void chip8_init(Chip8* cpu);
+void chip8_init(Chip8 *cpu);
 
-bool chip8_load_rom(Chip8* cpu, const char* filepath);
+bool chip8_load_rom(Chip8 *cpu, const char *filepath);
 
-void chip8_cycle(Chip8* cpu);
+void chip8_cycle(Chip8 *cpu);
 
 #endif
