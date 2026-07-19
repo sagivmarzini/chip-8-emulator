@@ -1,4 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <dirent.h>
 #include <SDL3/SDL.h>
 
 #include "chip8.h"
@@ -9,8 +13,61 @@
 
 #define AUDIO_FREQ 44100
 #define BEEP_HZ 440 // Tone pitch (A4 note)
+#define MAX_GAMES 32
+#define MAX_PATH_LEN 512
+
+// Scans the games directory and returns the path of the user's selected game
+bool select_game(char *out_path) {
+    const char *dir_path = "../games";
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        perror("Error opening games directory");
+        printf("Make sure the execution path has access to '%s'\n", dir_path);
+        return false;
+    }
+
+    struct dirent *entry;
+    char games[MAX_GAMES][256];
+    int game_count = 0;
+
+    printf("\n=== CHIP-8 ROM SELECTOR ===\n");
+    while ((entry = readdir(dir)) != NULL && game_count < MAX_GAMES) {
+        // Only list files ending with .ch8
+        if (strstr(entry->d_name, ".ch8") != NULL) {
+            strncpy(games[game_count], entry->d_name, sizeof(games[game_count]) - 1);
+            printf("[%d] %s\n", game_count + 1, games[game_count]);
+            game_count++;
+        }
+    }
+    closedir(dir);
+
+    if (game_count == 0) {
+        printf("No .ch8 files found in '%s'.\n", dir_path);
+        return false;
+    }
+
+    int choice = 0;
+    while (choice < 1 || choice > game_count) {
+        printf("\nSelect a game number (1-%d): ", game_count);
+        if (scanf("%d", &choice) != 1) {
+            // Clear buffer on invalid input
+            while (getchar() != '\n');
+            printf("Invalid input. Please enter a number.\n");
+        }
+    }
+
+    // Construct full relative path to the ROM
+    snprintf(out_path, MAX_PATH_LEN, "%s/%s", dir_path, games[choice - 1]);
+    printf("Loading: %s\n\n", out_path);
+    return true;
+}
 
 int main(int argc, char **argv) {
+    char selected_rom[MAX_PATH_LEN];
+    if (!select_game(selected_rom)) {
+        return 1;
+    }
+
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         printf("SDL init failed: %s\n", SDL_GetError());
         return 1;
@@ -39,7 +96,6 @@ int main(int argc, char **argv) {
         SDL_Log("Failed to create audio stream: %s", SDL_GetError());
     }
 
-    // --- RE-ADDED BEEP BUFFER GENERATION ---
     int16_t beep_buffer[AUDIO_FREQ];
     for (int i = 0; i < AUDIO_FREQ; i++) {
         // Generate a simple square wave alternating between high and low volume
@@ -49,7 +105,10 @@ int main(int argc, char **argv) {
     Chip8 cpu;
     chip8_init(&cpu);
 
-    if (!chip8_load_rom(&cpu, "../games/pong-1.ch8")) {
+    if (!chip8_load_rom(&cpu, selected_rom)) {
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
         return 1;
     }
 
@@ -121,6 +180,7 @@ int main(int argc, char **argv) {
                 SDL_ResumeAudioStreamDevice(audio_stream);
             } else {
                 // Stop playing and clear out any leftover audio data instantly
+            pragma_pause:
                 SDL_PauseAudioStreamDevice(audio_stream);
                 SDL_ClearAudioStream(audio_stream);
             }
