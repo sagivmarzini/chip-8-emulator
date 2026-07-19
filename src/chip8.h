@@ -7,8 +7,8 @@
 #define SYSTEM_MEMORY	4096
 #define NUM_REGISTERS	16
 #define STACK_SIZE		16
-#define SCREEN_WIDTH	64
-#define SCREEN_HEIGHT	32
+#define DISPLAY_WIDTH	64
+#define DISPLAY_HEIGHT	32
 #define NUM_KEYS		16
 #define MAX_FILE_SIZE	0xE00
 #define SPRITE_WIDTH	8
@@ -28,7 +28,7 @@ typedef struct {
     uint8_t delay_timer;
     uint8_t sound_timer;
 
-    uint8_t display[SCREEN_WIDTH][SCREEN_HEIGHT]; // Monochrome screen state (1 for on, 0 for off)
+    uint8_t display[DISPLAY_WIDTH][DISPLAY_HEIGHT]; // Monochrome screen state (1 for on, 0 for off)
     bool keypad[NUM_KEYS]; // Key state (true = pressed)
 
     // For when waiting for a key press
@@ -41,5 +41,7 @@ void chip8_init(Chip8 *cpu);
 bool chip8_load_rom(Chip8 *cpu, const char *filepath);
 
 void chip8_cycle(Chip8 *cpu);
+
+void chip8_update_timers(Chip8 *cpu);
 
 #endif

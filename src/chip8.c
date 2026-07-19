@@ -62,6 +62,22 @@ bool chip8_load_rom(Chip8 *cpu, const char *filepath) {
 }
 
 void chip8_cycle(Chip8 *cpu) {
+    if (cpu->waiting_for_key) {
+        bool key_pressed = false;
+        for (int i = 0; i < 16; i++) {
+            if (cpu->keypad[i]) {
+                cpu->V[cpu->waiting_register] = i;
+                cpu->waiting_for_key = false;
+                key_pressed = true;
+                break;
+            }
+        }
+        // If no key was pressed, exit early and don't execute the next cycle
+        if (!key_pressed) {
+            return;
+        }
+    }
+
     // Read the first byte, push it off to the right and add the second byte
     const uint16_t instruction = (cpu->ram[cpu->pc] << 8) | cpu->ram[cpu->pc + 1];
     cpu->pc += 2;
@@ -77,13 +93,13 @@ void chip8_cycle(Chip8 *cpu) {
 
     switch (op) {
         case 0x0000:
-            // 0nnn is ignored by modern interpreters
             switch (nn) {
                 case 0xE0: // Clear display
                     memset(cpu->display, 0, sizeof(cpu->display));
                     break;
-                case 0xEE: // Return from subroutine (function)
-                    cpu->pc = cpu->stack[cpu->sp--];
+                case 0xEE: // Return from subroutine
+                    cpu->pc = cpu->stack[cpu->sp];
+                    cpu->sp--;
                     break;
             }
             break;
@@ -91,7 +107,8 @@ void chip8_cycle(Chip8 *cpu) {
             cpu->pc = nnn;
             break;
         case 0x2000: // Call function at nnn
-            cpu->stack[++cpu->sp] = cpu->pc;
+            cpu->sp++;
+            cpu->stack[cpu->sp] = cpu->pc;
             cpu->pc = nnn;
             break;
         case 0x3000: // Skip next instruction if Vx = nn
@@ -134,7 +151,7 @@ void chip8_cycle(Chip8 *cpu) {
                     V[0xF] = V[x] >= V[y];
                     V[x] -= V[y];
                     break;
-                case 0x6:
+                case 0x6: // Shift right
                     V[0xF] = V[x] & 0x1;
                     V[x] >>= 1;
                     break;
@@ -142,8 +159,8 @@ void chip8_cycle(Chip8 *cpu) {
                     V[0xF] = V[y] >= V[x];
                     V[x] = V[y] - V[x];
                     break;
-                case 0xE:
-                    V[0xF] = V[x] & 0b10000000;
+                case 0xE: // Shift left
+                    V[0xF] = (V[x] & 0x80) >> 7;
                     V[x] <<= 1;
                     break;
             }
@@ -170,9 +187,12 @@ void chip8_cycle(Chip8 *cpu) {
                     uint8_t screen_x = (V[x] + col) % 64;
                     uint8_t screen_y = (V[y] + row) % 32;
 
-                    uint8_t sprite_pixel = cpu->ram[cpu->I + row] & (0b10000000 >> col);
+                    uint8_t sprite_pixel = (cpu->ram[cpu->I + row] & (0b10000000 >> col)) ? 1 : 0;
                     uint8_t screen_pixel = cpu->display[screen_x][screen_y];
-                    V[0xF] |= sprite_pixel & screen_pixel; // Mark collision
+
+                    if (sprite_pixel && screen_pixel) {
+                        V[0xF] = 1;
+                    }
 
                     cpu->display[screen_x][screen_y] ^= sprite_pixel;
                 }
@@ -209,8 +229,8 @@ void chip8_cycle(Chip8 *cpu) {
                 case 0x1E:
                     cpu->I += V[x];
                     break;
-                case 0x29:
-                    cpu->I = cpu->ram[FONT_STORE_OFFSET + V[x] * DIGIT_SIZE];
+                case 0x29: // Set I = location of sprite for digit Vx
+                    cpu->I = FONT_STORE_OFFSET + V[x] * DIGIT_SIZE;
                     break;
                 case 0x33: // Store BCD representation of Vx in memory locations I, I+1, and I+2
                     const uint8_t num = V[x];
@@ -231,4 +251,9 @@ void chip8_cycle(Chip8 *cpu) {
             }
             break;
     }
+}
+
+void chip8_update_timers(Chip8 *cpu) {
+    if (cpu->delay_timer > 0) cpu->delay_timer--;
+    if (cpu->sound_timer > 0) cpu->sound_timer--;
 }
